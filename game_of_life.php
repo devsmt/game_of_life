@@ -50,7 +50,7 @@ abstract class CellBase implements ICell {
     // - Qualsiasi cella viva con due o tre celle vive adiacenti sopravvive alla generazione successiva;
     // - Qualsiasi cella viva con più di tre celle vive adiacenti muore, come per effetto di sovrappopolazione;
     // - Qualsiasi cella morta con esattamente tre celle vive adiacenti diventa una cella viva, come per effetto di riproduzione.
-    protected function willLive(int $c_alive_near): bool {
+    public function willLive(int $c_alive_near): bool {
         if ($this->isAlive()) {
             // - Qualsiasi cella viva con meno di due celle vive adiacenti muore, come per effetto d'isolamento;
             if ($c_alive_near < 2) {
@@ -114,7 +114,7 @@ abstract class BaseGrid implements IGrid {
         $c_alive_near = 0;
         $near_cells = [];
         /**
-         * accedi alla matrice
+         * accede alla matrice
          * @return null|ICell
          */
         $_at = function (int $x, int $y) {
@@ -140,7 +140,6 @@ abstract class BaseGrid implements IGrid {
         $near_cells[] = $_at($x + 1, $y);
         // bottom right
         $near_cells[] = $_at($x + 1, $y + 1);
-
         // mantieni solo le celle vive
         $near_cells_alive = array_values(array_filter($near_cells,
             function ($cell) {
@@ -247,6 +246,7 @@ class GameOfLife {
         for ($i = 0; $i < $this->num_cicles; $i++) {
             $grid->clear();
             echo $grid->render();
+            echo sprintf("cycle %s of {$this->num_cicles} \n", 1 + $i);
             sleep($secs = 2);
         }
     }
@@ -262,7 +262,6 @@ class GameOfLife {
 function maybe(array $hash, $key, $def) {
     return isset($hash[$key]) ? $hash[$key] : $def;
 }
-
 /**
  * minimalist implementation
  * @param mixed $res
@@ -287,6 +286,27 @@ actions:
 }
 // run unit tests of the procedure
 function action_autotest(array $argv): void{
+    $alive_cell = new CLICell($alive = true);
+    $r = $alive_cell->willLive($c_alive_near = 0);
+    assertEquals($r, false, 'cell alive 0');
+    $r = $alive_cell->willLive($c_alive_near = 1);
+    assertEquals($r, false, 'cell alive 1');
+    $r = $alive_cell->willLive($c_alive_near = 2);
+    assertEquals($r, true, 'cell alive 2');
+    $r = $alive_cell->willLive($c_alive_near = 3);
+    assertEquals($r, true, 'cell alive 3');
+    $r = $alive_cell->willLive($c_alive_near = 4);
+    assertEquals($r, false, 'cell alive 4');
+    $r = $alive_cell->willLive($c_alive_near = 5);
+    assertEquals($r, false, 'cell alive 5');
+    //
+    $dead_cell = new CLICell($alive = false);
+    $r = $dead_cell->willLive($c_alive_near = 1);
+    assertEquals($r, false, 'cell alive 1');
+    $r = $dead_cell->willLive($c_alive_near = 3);
+    assertEquals($r, true, 'cell alive 3');
+
+    // grid tests
     $grid = new CLIGrid(5, 5, CLICell::class);
     // test empty matrix
     $grid->initState([
@@ -316,10 +336,9 @@ function action_autotest(array $argv): void{
         [0, 0, 0, 0, 0],
         [0, 0, 0, 0, 0],
     ]);
-    $grid->dumpState();
+    // $grid->dumpState();
     $c = $grid->getNearAliveCount($x = 1, $y = 1);
     assertEquals($c, 8, 'matrix 8');
-
 }
 // run the game or the unit tests
 function main(int $argc, array $argv): void {
