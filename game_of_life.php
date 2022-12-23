@@ -17,19 +17,16 @@ Le transizioni dipendono unicamente dallo stato delle celle vicine in quella gen
 - Qualsiasi cella viva con due o tre celle vive adiacenti sopravvive alla generazione successiva;
 - Qualsiasi cella viva con più di tre celle vive adiacenti muore, come per effetto di sovrappopolazione;
 - Qualsiasi cella morta con esattamente tre celle vive adiacenti diventa una cella viva, come per effetto di riproduzione.
-USAGE:
-tested on php 7.4
-php game_of_life.php
  */
 // il gioco potrebbe essere reso in più sistemi(HTML,canvas,altro),
 // le segenti interfacce definiscono cosa gli altri oggetti si aspettano dalla collaborazione
 interface IGrid {
     public function render(): string;
     public function clear(): void;
-    public function initState(): void;
+    public function initState(array $state = []): void;
 }
 interface ICell {
-    public function render(): string;
+    public function render(int $c_alive_near): string;
     public function isAlive(): bool;
 }
 //----------------------------------------------------------------------------
@@ -43,8 +40,8 @@ abstract class CellBase implements ICell {
     public function isAlive(): bool {
         return $this->is_alive;
     }
-    // TODO: logica di verifica della vitalità della cella, comune a tutti i tipi di cella
-    // TODO: this should be testable
+    // logica di verifica della vitalità della cella, comune a tutti i tipi di cella
+    // @see tests
     // Le transizioni dipendono unicamente dallo stato delle celle vicine in quella generazione:
     // - Qualsiasi cella viva con meno di due celle vive adiacenti muore, come per effetto d'isolamento;
     // - Qualsiasi cella viva con due o tre celle vive adiacenti sopravvive alla generazione successiva;
@@ -75,14 +72,16 @@ abstract class CellBase implements ICell {
 class CLICell extends CellBase implements ICell {
     const CHAR_ALIVE = '#';
     const CHAR_DEAD = '.';
-    // public function __construct(bool $is_alive) {
-    //     parent::__construct($is_alive);
-    // }
+    public function __construct(bool $is_alive) {
+        parent::__construct($is_alive);
+    }
     // rappresenta visivamente la cella
-    public function render(int $c_alive_near = 0): string {
-        return $this->willLive($c_alive_near) ? self::CHAR_ALIVE : self::CHAR_DEAD;
+    public function render(int $c_alive_near): string{
+        $this->is_alive = $this->willLive($c_alive_near);
+        return $this->is_alive ? self::CHAR_ALIVE : self::CHAR_DEAD;
     }
 }
+
 // logica comune a tutte le sottoclassi
 abstract class BaseGrid implements IGrid {
     protected int $c_horizontal = 0;
@@ -96,22 +95,16 @@ abstract class BaseGrid implements IGrid {
     ) {
         $this->c_horizontal = $c_horizontal;
         $this->c_vertical = $c_vertical;
-        // param validation
-        $autoload = false;
-        if (
-            !class_exists($cell_type, $autoload)
-            || !in_array('ICell', $a_impl = class_implements($cell_type, $autoload))
-        ) {
+        // param validation:
+        if (!is_subclass_of($cell_type, 'ICell', $allow_str = true)) {
             $msg = sprintf('Errore: cell type is undefined "%s" or of wrong type', $cell_type);
             throw new \Exception($msg);
         }
         $this->cell_type = $cell_type;
     }
     // conta le 4/8 celle adiacenti, vive
-    // brute force procedural aproach, if you have time to test it carefully find a better aproach
-    // this one is super clear
+    // brute force procedural aproach, which is super clear
     public function getNearAliveCount(int $x, int $y): int{
-        $c_alive_near = 0;
         $near_cells = [];
         /**
          * accede alla matrice
@@ -142,20 +135,19 @@ abstract class BaseGrid implements IGrid {
         $near_cells[] = $_at($x + 1, $y + 1);
         // mantieni solo le celle vive
         $near_cells_alive = array_values(array_filter($near_cells,
-            function ($cell) {
-                //cell is ICell|null
+            function ($cell) { //cell is ICell|null
                 return !empty($cell) && $cell->isAlive(); // true retained, false skipped
             }));
         $c_alive_near = count($near_cells_alive);
         return $c_alive_near;
     }
-    // TODO: maybe should be declared in the interface
     // initialize matrix state
     /** @param int[][]  $state */
     public function initState(array $state = []): void{
         // populate the matrix
         $this->matrix = [];
         if (empty($state)) {
+            // if no state is provided, init a random one
             for ($x = 0; $x < $this->c_horizontal; $x++) {
                 $this->matrix[$x] = [];
                 for ($y = 0; $y < $this->c_vertical; $y++) {
