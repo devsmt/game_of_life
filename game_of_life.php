@@ -49,23 +49,33 @@ abstract class CellBase implements ICell {
     // - Qualsiasi cella viva con più di tre celle vive adiacenti muore, come per effetto di sovrappopolazione;
     // - Qualsiasi cella morta con esattamente tre celle vive adiacenti diventa una cella viva, come per effetto di riproduzione.
     public function willLive(int $c_alive_near): bool {
+        /*
         if ($this->isAlive()) {
-            // - Qualsiasi cella viva con meno di due celle vive adiacenti muore, come per effetto d'isolamento;
-            if ($c_alive_near < 2) {
-                return false;
-            } elseif (in_array($c_alive_near, [2, 3])) {
-                // - Qualsiasi cella viva con due o tre celle vive adiacenti sopravvive alla generazione successiva;
-                return true;
-            } else {
-                // - Qualsiasi cella viva con più di tre celle vive adiacenti muore, come per effetto di sovrappopolazione;
-                return false;
-            }
+        // - Qualsiasi cella viva con meno di due celle vive adiacenti muore, come per effetto d'isolamento;
+        if ($c_alive_near < 2) {
+        return false;
+        } elseif (in_array($c_alive_near, [2, 3])) {
+        // - Qualsiasi cella viva con due o tre celle vive adiacenti sopravvive alla generazione successiva;
+        return true;
         } else {
-            // - Qualsiasi cella morta con esattamente tre celle vive adiacenti diventa una cella viva, come per effetto di riproduzione.
-            if ($c_alive_near === 3) {
-                return true;
-            }
+        // - Qualsiasi cella viva con più di tre celle vive adiacenti muore, come per effetto di sovrappopolazione;
+        return false;
         }
+        } else {
+        // - Qualsiasi cella morta con esattamente tre celle vive adiacenti diventa una cella viva, come per effetto di riproduzione.
+        if ($c_alive_near === 3) {
+        return true;
+        }
+        }
+         */
+        // - Qualsiasi cella viva con due o tre celle vive adiacenti sopravvive alla generazione successiva;
+        $healthy = $this->isAlive() && in_array($c_alive_near, [2, 3]);
+        // - Qualsiasi cella morta con esattamente tre celle vive adiacenti diventa una cella viva, come per effetto di riproduzione.
+        $reproduction = !$this->isAlive() && $c_alive_near === 3;
+        if ( $healthy || $reproduction ) {
+            return true;
+        }
+        // death is the most probable outcome
         return false;
     }
 }
@@ -171,7 +181,6 @@ abstract class BaseGrid implements IGrid {
     }
     // debug method
     public function dumpState(): void {
-        // populate the matrix
         foreach ($this->matrix as $x => $row) {
             foreach ($row as $y => $val) {
                 $cell = $this->matrix[$x][$y];
@@ -212,8 +221,7 @@ class CLIGrid extends BaseGrid implements IGrid {
     }
     // pulisce la griglia per il successivo rendering
     public function clear(): void{
-        // TODO: maybe there's a better way
-        system('clear');
+        system('clear'); // TODO: maybe there's a better way
     }
 }
 // manager del gioco, costruisce le dipendenze per fornirle agli oggetti che collabolarano
@@ -223,6 +231,7 @@ class GameOfLife {
     //
     private int $c_horizontal;
     private int $c_vertical;
+    private int $interval_secs;
     private int $num_cicles; // rendiamo n cicli della dutata di 1 secondo, potenzialmente la computazione sarebbe infinita
     // NOTA: inject all state and dependency from here
     // usually from a configurarion of some kind
@@ -230,11 +239,13 @@ class GameOfLife {
         string $game_rendering = 'cli',
         int $c_horizontal = 10,
         int $c_vertical = 8,
-        int $num_cicles = 30
+        int $num_cicles = 30,
+        int $interval_secs = 1
     ) {
         $this->c_horizontal = $c_horizontal;
         $this->c_vertical = $c_vertical;
         $this->num_cicles = $num_cicles;
+        $this->interval_secs = $interval_secs;
         if ($game_rendering == 'cli') {
             $this->grid_type = CLIGrid::class;
             $this->cell_type = CLICell::class;
@@ -257,7 +268,8 @@ class GameOfLife {
             $grid->generate(); //computa la prossima generazione, il nuovo stato
             echo $grid->render();
             echo sprintf("cycle %s of {$this->num_cicles} \n", 1 + $i);
-            sleep($secs = 2);
+            /** @psalm-suppress ArgumentTypeCoercion */
+            sleep($this->interval_secs);
         }
     }
 }
@@ -358,8 +370,9 @@ function main(int $argc, array $argv): void {
         case 'run':
             $game = new GameOfLife(
                 $render_engine = 'cli',
-                $c_horizontal = 10,
-                $c_vertical = 8
+                $c_horizontal = (int) maybe($argv, '2', 10),
+                $c_vertical = (int) maybe($argv, '3', 8),
+                $num_cicles = (int) maybe($argv, '4', 30)
             );
             $game->generate();
             break;
