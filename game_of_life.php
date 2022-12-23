@@ -34,18 +34,19 @@ php game_of_life.php
 // il gioco potrebbe essere reso in più sistemi(HTML,canvas,altro),
 // le segenti interfacce definiscono cosa gli altri oggetti si aspettano dalla collaborazione
 interface IGrid {
-    public function render();
-    public function clear();
+    public function render():string;
+    public function clear():void;
+    public function initState():void;
 }
 interface ICell {
-    public function render();
+    public function render():string;
 }
 
 //----------------------------------------------------------------------------
 //  CLI implementation
 //----------------------------------------------------------------------------
 
-class CellBase {
+abstract class CellBase implements ICell {
     public bool $is_alive = false;
     public function __construct(bool $is_alive = false) {
         $this->is_alive = $is_alive;
@@ -88,26 +89,41 @@ class CLICell extends CellBase implements ICell {
         parent::__construct();
     }
     // rappresenta visivamente la cella
-    public function render(int $c_alive_near=0): string {
+    public function render(int $c_alive_near = 0): string {
         return $this->willLive($c_alive_near) ? self::CHAR_ALIVE : self::CHAR_DEAD;
     }
 
 }
-// rappresenta la griglia resa in CLI, composta di celle
-class CLIGrid implements ICell {
-    protected $c_horizontal = 0;
-    protected $c_vertical = 0;
+// logica comune a tutte le sottoclassi
+abstract class BaseGrid implements IGrid {
+    protected int $c_horizontal = 0;
+    protected int $c_vertical = 0;
+    protected string $cell_type ;
     public function __construct(
         int $c_horizontal = 10,
         int $c_vertical = 8,
-        $cell_type
+        string $cell_type
     ) {
         $this->c_horizontal = $c_horizontal;
         $this->c_vertical = $c_vertical;
+        // param validation
+        if (
+            !class_exists($cell_type, $autoload=false)
+            || !in_array('ICell', $a_impl=class_implements( $cell_type, $autoload=true))
+        ) {
+            $msg = sprintf('Errore cell type is undefined "%s" ', $cell_type );
+            throw new \Exception($msg);
+        }
         $this->cell_type = $cell_type;
     }
+    // conta le 4/8 celle adiacenti, vive
+    public function getNearAliveCount(int $x, int $y): int{
+        $c_alive_near = random_int($min = 1, $max = 8);
+        return $c_alive_near;
+    }
+    // TODO: maybe should be declared in the interface
     // initialize matrix state
-    public function initState() {
+    public function initState():void {
         // populate the matrix
         $this->matrix = [];
         for ($i = 0; $i < $this->c_horizontal; $i++) {
@@ -118,25 +134,24 @@ class CLIGrid implements ICell {
             }
         }
     }
+}
+// rappresenta la griglia resa in CLI, composta di celle
+class CLIGrid extends BaseGrid implements IGrid {
     // rende in cli lo stato del gioco
-    public function render() {
-        for ($i = 0; $i < $this->c_horizontal; $i++) {
-            for ($j = 0; $j < $this->c_vertical; $j++) {
-                $cell = $this->matrix[$i][$j];
-                $c_alive_near = $this->getNearAliveCount();
-                echo $cell->render($c_alive_near);
+    public function render():string {
+        $res='';
+        for ($x = 0; $x < $this->c_horizontal; $x++) {
+            for ($y = 0; $y < $this->c_vertical; $y++) {
+                $cell = $this->matrix[$x][$y];
+                $c_alive_near = $this->getNearAliveCount($x, $y);
+                $res.= $cell->render($c_alive_near);
             }
-            echo "\n";
+            $res.= "\n";
         }
+        return $res;
     }
-    // conta le 4/8 celle adiacenti vive
-    public function getNearAliveCount(): int{
-        $c_alive_near = random_int($min = 1, $max = 8);
-        return $c_alive_near;
-    }
-
     // pulisce la griglia per il successivo rendering
-    public function clear() {
+    public function clear():void {
         // TODO: maybe there's a better way
         system('clear');
     }
@@ -180,7 +195,7 @@ class GameOfLife {
         $grid->initState();
         for ($i = 0; $i < $this->num_cicles; $i++) {
             $grid->clear();
-            $grid->render();
+            echo $grid->render();
             sleep($secs = 2);
         }
     }
