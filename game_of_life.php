@@ -5,14 +5,14 @@ Program Requirements:
 la sua evoluzione è determinata dal suo *stato iniziale*,
 Si svolge su una *griglia* di *celle*
 (potenzialmente che si estende all'infinito in tutte le direzioni;)
-Ogni cella ha 8 vicini, che sono le celle ad essa adiacenti,
+Ogni cella ha *8 vicini*, che sono le celle ad essa adiacenti,
 includendo quelle in senso diagonale.
-Ogni cella può trovarsi in due stati: viva o morta (o accesa e spenta, on e off).
+Ogni cella può trovarsi in *due stati*: viva o morta (o accesa e spenta, on e off).
 Lo stato della griglia evolve in intervalli di tempo
 Gli stati di tutte le celle in un dato istante sono usati per calcolare lo stato delle celle all'istante successivo.
 Tutte le celle del mondo vengono quindi aggiornate simultaneamente nel passaggio da un istante a quello successivo:
 passa così una *generazione*.
-Le transizioni dipendono unicamente dallo stato delle celle vicine in quella generazione:
+Le transizioni dipendono unicamente dallo stato delle *celle vicine in quella generazione*:
 - Qualsiasi cella viva con meno di due celle vive adiacenti muore, come per effetto d'isolamento;
 - Qualsiasi cella viva con due o tre celle vive adiacenti sopravvive alla generazione successiva;
 - Qualsiasi cella viva con più di tre celle vive adiacenti muore, come per effetto di sovrappopolazione;
@@ -23,10 +23,11 @@ Le transizioni dipendono unicamente dallo stato delle celle vicine in quella gen
 interface IGrid {
     public function render(): string;
     public function clear(): void;
+    public function generate(): void;
     public function initState(array $state = []): void;
 }
 interface ICell {
-    public function render(int $c_alive_near): string;
+    public function render(): string;
     public function isAlive(): bool;
 }
 //----------------------------------------------------------------------------
@@ -76,18 +77,20 @@ class CLICell extends CellBase implements ICell {
         parent::__construct($is_alive);
     }
     // rappresenta visivamente la cella
-    public function render(int $c_alive_near): string{
-        $this->is_alive = $this->willLive($c_alive_near);
+    public function render(): string {
         return $this->is_alive ? self::CHAR_ALIVE : self::CHAR_DEAD;
     }
 }
-
+// la griglia rappresenta la matrice di celle e computa il numero di celle adiacenti
 // logica comune a tutte le sottoclassi
 abstract class BaseGrid implements IGrid {
     protected int $c_horizontal = 0;
     protected int $c_vertical = 0;
-    protected string $cell_type;
+    protected string $cell_type = '';
+    // stato corrente
     protected array $matrix = [];
+    // stato futuro calcolato da generate()
+    protected array $matrix_next = [];
     public function __construct(
         int $c_horizontal = 10,
         int $c_vertical = 8,
@@ -103,7 +106,6 @@ abstract class BaseGrid implements IGrid {
         $this->cell_type = $cell_type;
     }
     // conta le 4/8 celle adiacenti, vive
-    // brute force procedural aproach, which is super clear
     public function getNearAliveCount(int $x, int $y): int{
         $near_cells = [];
         /**
@@ -117,6 +119,7 @@ abstract class BaseGrid implements IGrid {
                 return null;
             }
         };
+        // brute force procedural aproach, which is super clear
         // up left
         $near_cells[] = $_at($x - 1, $y - 1);
         // directly above
@@ -134,10 +137,9 @@ abstract class BaseGrid implements IGrid {
         // bottom right
         $near_cells[] = $_at($x + 1, $y + 1);
         // mantieni solo le celle vive
-        $near_cells_alive = array_values(array_filter($near_cells,
-            function ($cell) { //cell is ICell|null
-                return !empty($cell) && $cell->isAlive(); // true retained, false skipped
-            }));
+        $near_cells_alive = array_filter($near_cells,
+            fn($cell) => !empty($cell) && $cell->isAlive() // true retained, false skipped
+        );
         $c_alive_near = count($near_cells_alive);
         return $c_alive_near;
     }
@@ -160,8 +162,8 @@ abstract class BaseGrid implements IGrid {
             foreach ($state as $x => $row) {
                 foreach ($row as $y => $val) {
                     $cell = new $this->cell_type((bool) $val);
-                    $cell->x = $x; //dbg info
-                    $cell->y = $y;
+                    // $cell->x = $x; //dbg info
+                    // $cell->y = $y;
                     $this->matrix[$x][$y] = $cell;
                 }
             }
@@ -178,17 +180,31 @@ abstract class BaseGrid implements IGrid {
             echo "\n";
         }
     }
+    // computa la prossima generazione, il nuovo stato
+    public function generate(): void {
+        for ($x = 0; $x < $this->c_horizontal; $x++) {
+            for ($y = 0; $y < $this->c_vertical; $y++) {
+                $cell = clone $this->matrix[$x][$y];
+                $c_alive_near = $this->getNearAliveCount($x, $y);
+                $will_live = $cell->willLive($c_alive_near);
+                $cell->is_alive = $will_live;
+                $this->matrix_next[$x][$y] = $cell;
+            }
+        }
+    }
 }
 // rappresenta la griglia resa in CLI, composta di celle
 class CLIGrid extends BaseGrid implements IGrid {
     // rende in cli lo stato del gioco
     public function render(): string{
+        // TODO: assicurare che la prossima iterazione sia già calcolata
+        $this->matrix = $this->matrix_next;
+        $this->matrix_next = [];
         $res = '';
         for ($x = 0; $x < $this->c_horizontal; $x++) {
             for ($y = 0; $y < $this->c_vertical; $y++) {
                 $cell = $this->matrix[$x][$y];
-                $c_alive_near = $this->getNearAliveCount($x, $y);
-                $res .= $cell->render($c_alive_near);
+                $res .= $cell->render();
             }
             $res .= "\n";
         }
@@ -208,7 +224,7 @@ class GameOfLife {
     private int $c_horizontal;
     private int $c_vertical;
     private int $num_cicles; // rendiamo n cicli della dutata di 1 secondo, potenzialmente la computazione sarebbe infinita
-    // TODO: inject all state and dependency from here
+    // NOTA: inject all state and dependency from here
     // usually from a configurarion of some kind
     public function __construct(
         string $game_rendering = 'cli',
@@ -227,6 +243,7 @@ class GameOfLife {
             throw new \InvalidArgumentException($msg);
         }
     }
+
     // inizia la generazione
     public function generate(): void{
         $grid = new $this->grid_type(
@@ -237,6 +254,7 @@ class GameOfLife {
         $grid->initState();
         for ($i = 0; $i < $this->num_cicles; $i++) {
             $grid->clear();
+            $grid->generate(); //computa la prossima generazione, il nuovo stato
             echo $grid->render();
             echo sprintf("cycle %s of {$this->num_cicles} \n", 1 + $i);
             sleep($secs = 2);
@@ -247,6 +265,7 @@ class GameOfLife {
 //  lib functions
 //----------------------------------------------------------------------------
 /**
+ * accede a un array associativo e restituisce un default se l'elemento presente non fosse presente
  * @param string|int $key
  * @param mixed $def
  * @return mixed
@@ -297,7 +316,6 @@ function action_autotest(array $argv): void{
     assertEquals($r, false, 'cell alive 1');
     $r = $dead_cell->willLive($c_alive_near = 3);
     assertEquals($r, true, 'cell alive 3');
-
     // grid tests
     $grid = new CLIGrid(5, 5, CLICell::class);
     // test empty matrix
