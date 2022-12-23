@@ -34,12 +34,12 @@ php game_of_life.php
 // il gioco potrebbe essere reso in più sistemi(HTML,canvas,altro),
 // le segenti interfacce definiscono cosa gli altri oggetti si aspettano dalla collaborazione
 interface IGrid {
-    public function render():string;
-    public function clear():void;
-    public function initState():void;
+    public function render(): string;
+    public function clear(): void;
+    public function initState(): void;
 }
 interface ICell {
-    public function render():string;
+    public function render(): string;
 }
 
 //----------------------------------------------------------------------------
@@ -98,7 +98,8 @@ class CLICell extends CellBase implements ICell {
 abstract class BaseGrid implements IGrid {
     protected int $c_horizontal = 0;
     protected int $c_vertical = 0;
-    protected string $cell_type ;
+    protected string $cell_type;
+    protected array $matrix = [];
     public function __construct(
         int $c_horizontal = 10,
         int $c_vertical = 8,
@@ -107,11 +108,12 @@ abstract class BaseGrid implements IGrid {
         $this->c_horizontal = $c_horizontal;
         $this->c_vertical = $c_vertical;
         // param validation
+        $autoload = false;
         if (
-            !class_exists($cell_type, $autoload=false)
-            || !in_array('ICell', $a_impl=class_implements( $cell_type, $autoload=true))
+            !class_exists($cell_type, $autoload)
+            || !in_array('ICell', $a_impl = class_implements($cell_type, $autoload))
         ) {
-            $msg = sprintf('Errore cell type is undefined "%s" ', $cell_type );
+            $msg = sprintf('Errore: cell type is undefined "%s" or of wrong type', $cell_type);
             throw new \Exception($msg);
         }
         $this->cell_type = $cell_type;
@@ -123,7 +125,7 @@ abstract class BaseGrid implements IGrid {
     }
     // TODO: maybe should be declared in the interface
     // initialize matrix state
-    public function initState():void {
+    public function initState(): void{
         // populate the matrix
         $this->matrix = [];
         for ($i = 0; $i < $this->c_horizontal; $i++) {
@@ -138,20 +140,20 @@ abstract class BaseGrid implements IGrid {
 // rappresenta la griglia resa in CLI, composta di celle
 class CLIGrid extends BaseGrid implements IGrid {
     // rende in cli lo stato del gioco
-    public function render():string {
-        $res='';
+    public function render(): string{
+        $res = '';
         for ($x = 0; $x < $this->c_horizontal; $x++) {
             for ($y = 0; $y < $this->c_vertical; $y++) {
                 $cell = $this->matrix[$x][$y];
                 $c_alive_near = $this->getNearAliveCount($x, $y);
-                $res.= $cell->render($c_alive_near);
+                $res .= $cell->render($c_alive_near);
             }
-            $res.= "\n";
+            $res .= "\n";
         }
         return $res;
     }
     // pulisce la griglia per il successivo rendering
-    public function clear():void {
+    public function clear(): void{
         // TODO: maybe there's a better way
         system('clear');
     }
@@ -186,7 +188,7 @@ class GameOfLife {
         }
     }
     // inizia la generazione
-    public function generate() {
+    public function generate(): void{
         $grid = new $this->grid_type(
             $this->c_horizontal,
             $this->c_vertical,
@@ -201,11 +203,65 @@ class GameOfLife {
     }
 }
 //----------------------------------------------------------------------------
+//  lib functions
+//----------------------------------------------------------------------------
+/**
+ * @param string|int $key
+ * @param mixed $def
+ * @return mixed
+*/
+
+function maybe(array $hash, $key, $def) {
+    return isset($hash[$key]) ? $hash[$key] : $def;
+}
+//----------------------------------------------------------------------------
 //  main
 //----------------------------------------------------------------------------
-$game = new GameOfLife(
-    $render_engine = 'cli',
-    $c_horizontal = 10,
-    $c_vertical = 8
-);
-$game->generate();
+function action_usage(array $argv):void {
+    echo "{$argv[0]} [act1|act2] [param1]
+actions:
+    run = run the game
+    test = unit test of internals
+\n";
+}
+// run unit tests of the procedure
+function action_autotest(array $argv):void {
+
+}
+
+// run the game or the unit tests
+function main(int $argc, array $argv):void {
+    try {
+        $action = maybe($argv, '1', 'run');
+        switch ($action) {
+        case 'run':
+            $game = new GameOfLife(
+                $render_engine = 'cli',
+                $c_horizontal = 10,
+                $c_vertical = 8
+            );
+            $game->generate();
+            break;
+        case 'test':
+        case 'unit':
+        case 'unittest':
+        case 'autotest':
+            action_autotest($argv);
+            break;
+        default:
+            action_usage($argv);
+            break;
+        }
+    } catch (\Exception $e) {
+        $fmt = 'Exception: %s file:%s line:%s trace: %s ';
+        echo $msg = sprintf($fmt,
+            $e->getMessage(),
+            $e->getFile(), $e->getLine(),
+            $e->getTraceAsString()
+        );
+    }
+    exit(0);
+}
+// entrypoint
+/** @psalm-suppress PossiblyUndefinedArrayOffset  */
+main($argc = $_SERVER['argc'], $argv = $_SERVER['argv']);

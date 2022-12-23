@@ -1,0 +1,83 @@
+<?xml version="1.0"?>
+<psalm
+    totallyTyped="false"
+    resolveFromConfigFile="true"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns="https://getpsalm.org/schema/config"
+    xsi:schemaLocation="https://getpsalm.org/schema/config vendor/vimeo/psalm/config.xsd"
+>
+   
+    <projectFiles>
+        <file name="./game_of_life.php" />
+        <!--
+        <ignoreFiles>
+           <directory name="vendor" />
+        </ignoreFiles>
+        -->
+    </projectFiles>
+    
+
+    <issueHandlers>
+        <LessSpecificReturnType errorLevel="info" />
+        <RedundantCastGivenDocblockType errorLevel="info" />
+        <UndefinedDocblockClass errorLevel="info" />
+        <UndefinedClass errorLevel="info" />
+        <ParadoxicalCondition errorLevel="info" />
+
+        <!-- level 3 issues - slightly lazy code writing, but provably low false-negatives -->
+
+        <DeprecatedMethod errorLevel="error" />
+        <DeprecatedProperty errorLevel="error" />
+        <DeprecatedClass errorLevel="error" />
+        <DeprecatedConstant errorLevel="error" />
+        <DeprecatedFunction errorLevel="error" />
+        <DeprecatedInterface errorLevel="error" />
+        <DeprecatedTrait errorLevel="error" />
+
+        <InternalMethod errorLevel="info" />
+        <InternalProperty errorLevel="info" />
+        <InternalClass errorLevel="info" />
+
+        <MissingClosureReturnType errorLevel="info" />
+        <MissingReturnType errorLevel="error" />
+        <MissingPropertyType errorLevel="info" />
+        <InvalidDocblock errorLevel="info" />
+        <!--
+        <MisplacedRequiredParam errorLevel="info" /> -->
+
+        <PropertyNotSetInConstructor errorLevel="info" />
+        <MissingConstructor errorLevel="info" />
+        <MissingClosureParamType errorLevel="error" />
+        <MissingParamType errorLevel="error" />
+
+        <RedundantCondition errorLevel="info" />
+
+        <DocblockTypeContradiction errorLevel="info" />
+        <RedundantConditionGivenDocblockType errorLevel="info" />
+
+        <UnresolvableInclude errorLevel="info" />
+
+        <RawObjectIteration errorLevel="info" />
+
+        <InvalidStringClass errorLevel="info" />
+        <TypeDoesNotContainType errorLevel="info" />
+        <PossiblyInvalidArgument errorLevel="info" />
+
+        <RedundantCast errorLevel="info" />
+
+
+        <MissingDependency errorLevel="info" />
+        <UndefinedPropertyAssignment errorLevel="info" />
+        <UndefinedPropertyFetch errorLevel="info" />
+        <UndefinedFunction errorLevel="error" />
+        <ReservedWord errorLevel="info" />  <!-- should not complain about :void -->
+ 
+        <LessSpecificReturnType errorLevel="info" />
+    </issueHandlers>
+
+
+
+
+
+</psalm>
+
