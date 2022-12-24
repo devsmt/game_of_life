@@ -23,9 +23,8 @@ Le transizioni dipendono unicamente dallo stato delle *celle vicine in quella ge
 interface IGrid {
     public function render(): string;
     public function clear(): void;
-    public function generate(): void;
-    /** @param int[][]  $state */
-    public function initState(array $state = []): void;
+    // aggiorna la propria matrice con la nuova generazione
+    public function generateNext(): void;
 }
 interface ICell {
     public function render(): string;
@@ -44,7 +43,7 @@ abstract class CellBase implements ICell {
     public function isAlive(): bool {
         return $this->is_alive;
     }
-    public function setAlive(bool $will_live): void {
+    public function setAlive(bool $will_live): void{
         $this->is_alive = $will_live;
     }
     // logica di verifica della vitalità della cella, comune a tutti i tipi di cella
@@ -74,7 +73,6 @@ abstract class CellBase implements ICell {
         //     }
         //     return false;
         // }
-
         // - Qualsiasi cella viva con due o tre celle vive adiacenti sopravvive alla generazione successiva;
         $healthy = $this->isAlive() && in_array($c_alive_near, [2, 3]);
         // - Qualsiasi cella morta con esattamente tre celle vive adiacenti diventa una cella viva, come per effetto di riproduzione.
@@ -98,25 +96,13 @@ class CLICell extends CellBase implements ICell {
         return $this->is_alive ? self::CHAR_ALIVE : self::CHAR_DEAD;
     }
 }
-// la griglia rappresenta la matrice di celle e computa il numero di celle adiacenti
-// logica comune a tutte le sottoclassi
-abstract class BaseGrid implements IGrid {
-    protected int $c_horizontal = 0;
-    protected int $c_vertical = 0;
-    protected string $cell_type = '';
-    // stato corrente
-    /** @var  ICell[][] $matrix */
-    protected array $matrix = [];
-    // stato futuro calcolato da generate()
+// main datastructure of the game
+class Matrix {
     /** @var  ICell[][] $matrix_next */
-    protected array $matrix_next = [];
-    public function __construct(
-        int $c_horizontal = 10,
-        int $c_vertical = 8,
-        string $cell_type
-    ) {
-        $this->c_horizontal = $c_horizontal;
-        $this->c_vertical = $c_vertical;
+    protected array $matrix = [];
+    protected string $cell_type;
+    //
+    public function __construct(string $cell_type) {
         // param validation:
         /** @psalm-suppress ArgumentTypeCoercion */
         if (!is_subclass_of($cell_type, (string) 'ICell', $allow_str = true)) {
@@ -126,14 +112,23 @@ abstract class BaseGrid implements IGrid {
         $this->cell_type = $cell_type;
     }
     /**
-    * accede alla matrice
-    * @return null|ICell
-    */
+     * accede alla matrice
+     * @return null|ICell
+     */
     protected function at(int $x, int $y) {
-        if (isset($this->matrix[$x][$y])) {
-            return $this->matrix[$x][$y];
-        } else {
-            return null;
+        return isset($this->matrix[$x][$y]) ? $this->matrix[$x][$y] : null;
+    }
+    /**
+     * applica a ciascun elemento la closure argomento
+     * @param callable(ICell, int, int): ICell $fn
+     */
+    public function map($fn): void {
+        foreach ($this->matrix as $x => $row) {
+            foreach ($row as $y => &$cell) {
+                // $cell = $this->at($x, $y);
+                // $this->matrix[$x][$y] = $fn($cell, $x, $y);
+                $cell = $fn($cell, $x, $y);
+            }
         }
     }
     // conta le 4/8 celle adiacenti, vive
@@ -165,57 +160,96 @@ abstract class BaseGrid implements IGrid {
         return $c_alive_near;
     }
     // initialize matrix state
-    /** @param int[][]|bool[][]  $state */
-    public function initState(array $state = []): void{
+    public function initState(int $c_horizontal, int $c_vertical): void{
         // populate the matrix
         $this->matrix = [];
-        if (empty($state)) {
-            // if no state is provided, init a random one
-            for ($x = 0; $x < $this->c_horizontal; $x++) {
-                // $this->matrix[$x] = [];
-                for ($y = 0; $y < $this->c_vertical; $y++) {
-                    $rnd_is_alive = (bool) random_int($min = 0, $max = 1);
-                    /** @var ICell $cell */
-                    $cell = new $this->cell_type($rnd_is_alive);
-                    $this->matrix[$x][$y] = $cell;
-                }
-            }
-        } else {
-            // init cells as instructed
-            foreach ($state as $x => $row) {
-                foreach ($row as $y => $val) {
-                    /** @var ICell $cell */
-                    $cell = new $this->cell_type((bool) $val);
-                    // $cell->x = $x; //dbg info
-                    // $cell->y = $y;
-                    $this->matrix[$x][$y] = $cell;
-                }
+        for ($x = 0; $x < $c_horizontal; $x++) {
+            for ($y = 0; $y < $c_vertical; $y++) {
+                $rnd_is_alive = (bool) random_int($min = 0, $max = 1);
+                /** @var ICell $cell */
+                $cell = new $this->cell_type($rnd_is_alive);
+                $this->matrix[$x][$y] = $cell;
             }
         }
     }
-    // computa la prossima generazione, il nuovo stato
-    public function generate(): void {
-        for ($x = 0; $x < $this->c_horizontal; $x++) {
-            for ($y = 0; $y < $this->c_vertical; $y++) {
-                $cell = clone $this->matrix[$x][$y];
+    public function setState(array $state = []): void {
+        // init cells as instructed
+        foreach ($state as $x => $row) {
+            foreach ($row as $y => $val) {
+                /** @var ICell $cell */
+                $cell = new $this->cell_type((bool) $val);
+                // $cell->x = $x; //dbg info
+                // $cell->y = $y;
+                $this->matrix[$x][$y] = $cell;
+            }
+        }
+    }
+    // computa la prossima generazione
+    public function generateNext(int $c_horizontal, int $c_vertical): Matrix{
+        $matrix_next = [];
+        for ($x = 0; $x < $c_horizontal; $x++) {
+            for ($y = 0; $y < $c_vertical; $y++) {
                 $c_alive_near = $this->getNearAliveCount($x, $y);
-                $will_live = $cell->willLive($c_alive_near);
-                $cell->setAlive($will_live);
-                $this->matrix_next[$x][$y] = $cell;
+                $cell_prev = $this->at($x, $y);
+                if (!empty($cell_prev)) {
+                    $will_live = $cell_prev->willLive($c_alive_near);
+                    $matrix_next[$x][$y] = $will_live;
+                } else {
+                    $msg = sprintf('Error: cant find a cell at [%s,%s]', $x, $y);
+                    throw new \Exception($msg);
+                }
             }
         }
+        $matrix = new Matrix($this->cell_type);
+        $matrix->setState($matrix_next);
+        return $matrix;
     }
-    // debug method
-    public function dumpState(string $row_sep="\n"): string {
+    /**
+     * @param callable(ICell): string $fn
+     */
+    public function dumpState(string $row_sep = "\n", callable $fn = null): string {
+        // dumper function di default
+        if (empty($fn)) {
+            $fn = function ($cell): string {
+                return $cell->isAlive() ? '1' : '0';
+            };
+        }
         $ret = '';
         foreach ($this->matrix as $x => $row) {
             foreach ($row as $y => $val) {
                 $cell = $this->matrix[$x][$y];
-                $ret .= $cell->isAlive() ? '1' : '0';
+                $ret .= $fn($cell);
             }
             $ret .= $row_sep;
         }
         return $ret;
+    }
+}
+// la griglia rappresenta la matrice di celle e computa il numero di celle adiacenti
+// logica comune a tutte le sottoclassi
+abstract class BaseGrid implements IGrid {
+    protected int $c_horizontal;
+    protected int $c_vertical;
+    // stato corrente
+    // stato futuro calcolato da generate()
+    /** @var  Matrix $matrix */
+    protected $matrix;
+    public function __construct(
+        int $c_horizontal,
+        int $c_vertical,
+        Matrix $matrix
+    ) {
+        $this->c_horizontal = $c_horizontal;
+        $this->c_vertical = $c_vertical;
+        $this->matrix = $matrix;
+    }
+    // computa la prossima generazione, il nuovo stato e aggiorna la propria matrice con la nuova
+    public function generateNext(): void{
+        $matrix_new = $this->matrix->generateNext(
+            $this->c_horizontal,
+            $this->c_vertical
+        );
+        $this->matrix = $matrix_new;
     }
 }
 // rappresenta la griglia resa in CLI, composta di celle
@@ -223,16 +257,12 @@ class CLIGrid extends BaseGrid implements IGrid {
     // rende in cli lo stato del gioco
     public function render(): string{
         // TODO: assicurare che la prossima iterazione sia già calcolata
-        $this->matrix = $this->matrix_next;
-        $this->matrix_next = [];
-        $res = '';
-        for ($x = 0; $x < $this->c_horizontal; $x++) {
-            for ($y = 0; $y < $this->c_vertical; $y++) {
-                $cell = $this->matrix[$x][$y];
-                $res .= $cell->render();
+        $res = $this->matrix->dumpState(
+            $row_sep = "\n",
+            function ($cell): string {
+                return $cell->render();
             }
-            $res .= "\n";
-        }
+        );
         return $res;
     }
     // pulisce la griglia per il successivo rendering
@@ -270,15 +300,15 @@ class GameOfLife {
             throw new \InvalidArgumentException($msg);
         }
     }
-
     // inizia la generazione
     public function run(): void{
+        $matrix = new Matrix($this->cell_type);
+        $matrix->initState($this->c_horizontal, $this->c_vertical);
         $grid = new $this->grid_type(
             $this->c_horizontal,
             $this->c_vertical,
-            $this->cell_type
+            $matrix
         );
-        $grid->initState();
         for ($i = 0; $i < $this->num_cicles; $i++) {
             $grid->clear();
             $grid->generate(); // computa la prossima generazione, il nuovo stato
@@ -345,29 +375,29 @@ function action_autotest(array $argv): void{
     $r = $dead_cell->willLive($c_alive_near = 3);
     assertEquals($r, true, 'cell alive 3');
     // grid tests
-    $grid = new CLIGrid(5, 5, CLICell::class);
+    $matrix = new Matrix(CLICell::class);
     // test empty matrix
-    $grid->initState([
+    $matrix->setState([
         [0, 0, 0, 0, 0],
         [0, 0, 0, 0, 0],
         [0, 0, 0, 0, 0],
         [0, 0, 0, 0, 0],
         [0, 0, 0, 0, 0],
     ]);
-    $c = $grid->getNearAliveCount($x = 0, $y = 0);
+    $c = $matrix->getNearAliveCount($x = 0, $y = 0);
     assertEquals($c, 0, 'empty matrix');
     // test punto superiore
-    $grid->initState([
+    $matrix->setState([
         [0, 1, 0, 0, 0],
         [1, 1, 0, 0, 0],
         [0, 0, 0, 0, 0],
         [0, 0, 0, 0, 0],
         [0, 0, 0, 0, 0],
     ]);
-    $c = $grid->getNearAliveCount($x = 0, $y = 0);
+    $c = $matrix->getNearAliveCount($x = 0, $y = 0);
     assertEquals($c, 3, 'matrix 1');
     // full test
-    $grid->initState([
+    $matrix->setState([
         [1, 1, 1, 0, 0],
         [1, 1, 1, 0, 0],
         [1, 1, 1, 0, 0],
@@ -375,7 +405,7 @@ function action_autotest(array $argv): void{
         [0, 0, 0, 0, 0],
     ]);
     // $grid->dumpState();
-    $c = $grid->getNearAliveCount($x = 1, $y = 1);
+    $c = $matrix->getNearAliveCount($x = 1, $y = 1);
     assertEquals($c, 8, 'matrix 8');
 }
 // run the game or the unit tests
