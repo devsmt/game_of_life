@@ -30,17 +30,22 @@ interface IGrid {
 interface ICell {
     public function render(): string;
     public function isAlive(): bool;
+    public function setAlive(bool $will_live): void;
+    public function willLive(int $c_alive_near): bool;
 }
 //----------------------------------------------------------------------------
 //  CLI implementation
 //----------------------------------------------------------------------------
 abstract class CellBase implements ICell {
-    public bool $is_alive = false;
+    protected bool $is_alive = false;
     public function __construct(bool $is_alive) {
         $this->is_alive = $is_alive;
     }
     public function isAlive(): bool {
         return $this->is_alive;
+    }
+    public function setAlive(bool $will_live): void {
+        $this->is_alive = $will_live;
     }
     // logica di verifica della vitalità della cella, comune a tutti i tipi di cella
     // @see tests
@@ -50,25 +55,26 @@ abstract class CellBase implements ICell {
     // - Qualsiasi cella viva con più di tre celle vive adiacenti muore, come per effetto di sovrappopolazione;
     // - Qualsiasi cella morta con esattamente tre celle vive adiacenti diventa una cella viva, come per effetto di riproduzione.
     public function willLive(int $c_alive_near): bool{
-        /*
-        if ($this->isAlive()) {
-        // - Qualsiasi cella viva con meno di due celle vive adiacenti muore, come per effetto d'isolamento;
-        if ($c_alive_near < 2) {
-        return false;
-        } elseif (in_array($c_alive_near, [2, 3])) {
-        // - Qualsiasi cella viva con due o tre celle vive adiacenti sopravvive alla generazione successiva;
-        return true;
-        } else {
-        // - Qualsiasi cella viva con più di tre celle vive adiacenti muore, come per effetto di sovrappopolazione;
-        return false;
-        }
-        } else {
-        // - Qualsiasi cella morta con esattamente tre celle vive adiacenti diventa una cella viva, come per effetto di riproduzione.
-        if ($c_alive_near === 3) {
-        return true;
-        }
-        }
-         */
+        // algoritmo didascalico, come dettato dei requirements, volendo si può semplificare
+        // if ($this->isAlive()) {
+        //     // - Qualsiasi cella viva con meno di due celle vive adiacenti muore, come per effetto d'isolamento;
+        //     if ($c_alive_near < 2) {
+        //         return false;
+        //     } elseif (in_array($c_alive_near, [2, 3])) {
+        //         // - Qualsiasi cella viva con due o tre celle vive adiacenti sopravvive alla generazione successiva;
+        //         return true;
+        //     } else {
+        //         // - Qualsiasi cella viva con più di tre celle vive adiacenti muore, come per effetto di sovrappopolazione;
+        //         return false;
+        //     }
+        // } else {
+        //     // - Qualsiasi cella morta con esattamente tre celle vive adiacenti diventa una cella viva, come per effetto di riproduzione.
+        //     if ($c_alive_near === 3) {
+        //         return true;
+        //     }
+        //     return false;
+        // }
+
         // - Qualsiasi cella viva con due o tre celle vive adiacenti sopravvive alla generazione successiva;
         $healthy = $this->isAlive() && in_array($c_alive_near, [2, 3]);
         // - Qualsiasi cella morta con esattamente tre celle vive adiacenti diventa una cella viva, come per effetto di riproduzione.
@@ -99,8 +105,10 @@ abstract class BaseGrid implements IGrid {
     protected int $c_vertical = 0;
     protected string $cell_type = '';
     // stato corrente
+    /** @var  ICell[][] $matrix */
     protected array $matrix = [];
     // stato futuro calcolato da generate()
+    /** @var  ICell[][] $matrix_next */
     protected array $matrix_next = [];
     public function __construct(
         int $c_horizontal = 10,
@@ -130,6 +138,7 @@ abstract class BaseGrid implements IGrid {
     }
     // conta le 4/8 celle adiacenti, vive
     public function getNearAliveCount(int $x, int $y): int{
+        /** @var  array<int, null|ICell> $near_cells */
         $near_cells = [];
         // brute force procedural aproach, which is super clear
         // up left
@@ -156,39 +165,32 @@ abstract class BaseGrid implements IGrid {
         return $c_alive_near;
     }
     // initialize matrix state
-    /** @param int[][]  $state */
+    /** @param int[][]|bool[][]  $state */
     public function initState(array $state = []): void{
         // populate the matrix
         $this->matrix = [];
         if (empty($state)) {
             // if no state is provided, init a random one
             for ($x = 0; $x < $this->c_horizontal; $x++) {
-                $this->matrix[$x] = [];
+                // $this->matrix[$x] = [];
                 for ($y = 0; $y < $this->c_vertical; $y++) {
                     $rnd_is_alive = (bool) random_int($min = 0, $max = 1);
-                    $this->matrix[$x][$y] = new $this->cell_type($rnd_is_alive);
+                    /** @var ICell $cell */
+                    $cell = new $this->cell_type($rnd_is_alive);
+                    $this->matrix[$x][$y] = $cell;
                 }
             }
         } else {
             // init cells as instructed
             foreach ($state as $x => $row) {
                 foreach ($row as $y => $val) {
+                    /** @var ICell $cell */
                     $cell = new $this->cell_type((bool) $val);
                     // $cell->x = $x; //dbg info
                     // $cell->y = $y;
                     $this->matrix[$x][$y] = $cell;
                 }
             }
-        }
-    }
-    // debug method
-    public function dumpState(): void {
-        foreach ($this->matrix as $x => $row) {
-            foreach ($row as $y => $val) {
-                $cell = $this->matrix[$x][$y];
-                echo $cell->isAlive() ? '1' : '0';
-            }
-            echo "\n";
         }
     }
     // computa la prossima generazione, il nuovo stato
@@ -198,10 +200,22 @@ abstract class BaseGrid implements IGrid {
                 $cell = clone $this->matrix[$x][$y];
                 $c_alive_near = $this->getNearAliveCount($x, $y);
                 $will_live = $cell->willLive($c_alive_near);
-                $cell->is_alive = $will_live;
+                $cell->setAlive($will_live);
                 $this->matrix_next[$x][$y] = $cell;
             }
         }
+    }
+    // debug method
+    public function dumpState(string $row_sep="\n"): string {
+        $ret = '';
+        foreach ($this->matrix as $x => $row) {
+            foreach ($row as $y => $val) {
+                $cell = $this->matrix[$x][$y];
+                $ret .= $cell->isAlive() ? '1' : '0';
+            }
+            $ret .= $row_sep;
+        }
+        return $ret;
     }
 }
 // rappresenta la griglia resa in CLI, composta di celle
@@ -258,7 +272,7 @@ class GameOfLife {
     }
 
     // inizia la generazione
-    public function generate(): void{
+    public function run(): void{
         $grid = new $this->grid_type(
             $this->c_horizontal,
             $this->c_vertical,
@@ -267,7 +281,7 @@ class GameOfLife {
         $grid->initState();
         for ($i = 0; $i < $this->num_cicles; $i++) {
             $grid->clear();
-            $grid->generate(); //computa la prossima generazione, il nuovo stato
+            $grid->generate(); // computa la prossima generazione, il nuovo stato
             echo $grid->render();
             echo sprintf("cycle %s of {$this->num_cicles} \n", 1 + $i);
             /** @psalm-suppress ArgumentTypeCoercion */
@@ -376,7 +390,7 @@ function main(int $argc, array $argv): void {
                 $c_vertical = (int) maybe($argv, '3', 8),
                 $num_cicles = (int) maybe($argv, '4', 30)
             );
-            $game->generate();
+            $game->run();
             break;
         case 'test':
         case 'unit':
