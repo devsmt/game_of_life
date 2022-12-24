@@ -253,7 +253,7 @@ abstract class BaseGrid implements IGrid {
     }
     // computa la prossima generazione, il nuovo stato e lo rende
     // questo metodo, assicurare che la prossima iterazione sia già calcolata
-    public function generateAndRender():string{
+    public function generateAndRender(): string{
         $this->generateNext();
         return $this->render();
     }
@@ -348,6 +348,30 @@ function assertEquals($res, $exp, string $label = ''): void{
     "ERROR: {$_e($res)} !== {$_e($exp)}  $label\n"
     : "ok {$_e($res)} === {$_e($res)}  $label\n";
 }
+
+function arg_val(string $key, string $def = ''): string {
+    /** @psalm-suppress PossiblyUndefinedArrayOffset */
+    foreach ($_SERVER['argv'] as $val) {
+        $found = strpos($val, '--' . $key) !== false;
+        if ($found) {
+            $a_val = explode('=', $val);
+            return $a_val[1];
+        }
+    }
+    return $def;
+}
+function arg_flag(string $key, string $def = ''): bool {
+    /** @psalm-suppress PossiblyUndefinedArrayOffset */
+    foreach ($_SERVER['argv'] as $val) {
+        $found = strpos($val, '--' . $key) !== false; // inizia con '--' ?
+        $is_val = strpos($val, '=') !== false; // se nella form --aa=bb non è flag
+        if ($found && !$is_val) {
+            return true;
+        }
+    }
+    return false;
+}
+
 //----------------------------------------------------------------------------
 //  main
 //----------------------------------------------------------------------------
@@ -421,9 +445,10 @@ function main(int $argc, array $argv): void {
         case 'run':
             $game = new GameOfLife(
                 $render_engine = 'cli',
-                $c_horizontal = (int) maybe($argv, '2', 10),
-                $c_vertical = (int) maybe($argv, '3', 8),
-                $num_cicles = (int) maybe($argv, '4', 30)
+                $c_horizontal = (int) arg_val('hnum', '10'),
+                $c_vertical = (int) arg_val('vnum', '8'),
+                $num_cicles = (int) arg_val('cicles', '30'),
+                $interval_secs = (int) arg_val('int', '1'),
             );
             $game->run();
             break;
