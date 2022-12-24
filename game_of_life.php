@@ -24,7 +24,7 @@ interface IGrid {
     public function render(): string;
     public function clear(): void;
     // aggiorna la propria matrice con la nuova generazione
-    public function generateNext(): void;
+    public function generateAndRender(): string;
 }
 interface ICell {
     public function render(): string;
@@ -244,19 +244,24 @@ abstract class BaseGrid implements IGrid {
         $this->matrix = $matrix;
     }
     // computa la prossima generazione, il nuovo stato e aggiorna la propria matrice con la nuova
-    public function generateNext(): void{
+    protected function generateNext(): void{
         $matrix_new = $this->matrix->generateNext(
             $this->c_horizontal,
             $this->c_vertical
         );
         $this->matrix = $matrix_new;
     }
+    // computa la prossima generazione, il nuovo stato e lo rende
+    // questo metodo, assicurare che la prossima iterazione sia già calcolata
+    public function generateAndRender():string{
+        $this->generateNext();
+        return $this->render();
+    }
 }
 // rappresenta la griglia resa in CLI, composta di celle
 class CLIGrid extends BaseGrid implements IGrid {
     // rende in cli lo stato del gioco
     public function render(): string{
-        // TODO: assicurare che la prossima iterazione sia già calcolata
         $res = $this->matrix->dumpState(
             $row_sep = "\n",
             function ($cell): string {
@@ -265,7 +270,7 @@ class CLIGrid extends BaseGrid implements IGrid {
         );
         return $res;
     }
-    // pulisce la griglia per il successivo rendering
+    // pulisce la griglia per il successivo rendering, dipende dal tipo di rendering
     public function clear(): void{
         system('clear'); // TODO: maybe there's a better way
     }
@@ -311,8 +316,8 @@ class GameOfLife {
         );
         for ($i = 0; $i < $this->num_cicles; $i++) {
             $grid->clear();
-            $grid->generate(); // computa la prossima generazione, il nuovo stato
-            echo $grid->render();
+            // computa la prossima generazione, il nuovo stato e rendilo
+            echo $grid->generateAndRender();
             echo sprintf("cycle %s of {$this->num_cicles} \n", 1 + $i);
             /** @psalm-suppress ArgumentTypeCoercion */
             sleep($this->interval_secs);
