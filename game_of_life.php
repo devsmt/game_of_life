@@ -24,6 +24,7 @@ interface IGrid {
     public function render(): string;
     public function clear(): void;
     public function generate(): void;
+    /** @param int[][]  $state */
     public function initState(array $state = []): void;
 }
 interface ICell {
@@ -48,7 +49,7 @@ abstract class CellBase implements ICell {
     // - Qualsiasi cella viva con due o tre celle vive adiacenti sopravvive alla generazione successiva;
     // - Qualsiasi cella viva con più di tre celle vive adiacenti muore, come per effetto di sovrappopolazione;
     // - Qualsiasi cella morta con esattamente tre celle vive adiacenti diventa una cella viva, come per effetto di riproduzione.
-    public function willLive(int $c_alive_near): bool {
+    public function willLive(int $c_alive_near): bool{
         /*
         if ($this->isAlive()) {
         // - Qualsiasi cella viva con meno di due celle vive adiacenti muore, come per effetto d'isolamento;
@@ -72,7 +73,7 @@ abstract class CellBase implements ICell {
         $healthy = $this->isAlive() && in_array($c_alive_near, [2, 3]);
         // - Qualsiasi cella morta con esattamente tre celle vive adiacenti diventa una cella viva, come per effetto di riproduzione.
         $reproduction = !$this->isAlive() && $c_alive_near === 3;
-        if ( $healthy || $reproduction ) {
+        if ($healthy || $reproduction) {
             return true;
         }
         // death is the most probable outcome
@@ -109,43 +110,44 @@ abstract class BaseGrid implements IGrid {
         $this->c_horizontal = $c_horizontal;
         $this->c_vertical = $c_vertical;
         // param validation:
-        if (!is_subclass_of($cell_type, 'ICell', $allow_str = true)) {
+        /** @psalm-suppress ArgumentTypeCoercion */
+        if (!is_subclass_of($cell_type, (string) 'ICell', $allow_str = true)) {
             $msg = sprintf('Errore: cell type is undefined "%s" or of wrong type', $cell_type);
             throw new \Exception($msg);
         }
         $this->cell_type = $cell_type;
     }
+    /**
+    * accede alla matrice
+    * @return null|ICell
+    */
+    protected function at(int $x, int $y) {
+        if (isset($this->matrix[$x][$y])) {
+            return $this->matrix[$x][$y];
+        } else {
+            return null;
+        }
+    }
     // conta le 4/8 celle adiacenti, vive
     public function getNearAliveCount(int $x, int $y): int{
         $near_cells = [];
-        /**
-         * accede alla matrice
-         * @return null|ICell
-         */
-        $_at = function (int $x, int $y) {
-            if (isset($this->matrix[$x][$y])) {
-                return $this->matrix[$x][$y];
-            } else {
-                return null;
-            }
-        };
         // brute force procedural aproach, which is super clear
         // up left
-        $near_cells[] = $_at($x - 1, $y - 1);
+        $near_cells[] = $this->at($x - 1, $y - 1);
         // directly above
-        $near_cells[] = $_at($x - 1, $y);
+        $near_cells[] = $this->at($x - 1, $y);
         // up right
-        $near_cells[] = $_at($x - 1, $y + 1);
+        $near_cells[] = $this->at($x - 1, $y + 1);
         // left
-        $near_cells[] = $_at($x, $y - 1);
+        $near_cells[] = $this->at($x, $y - 1);
         // right
-        $near_cells[] = $_at($x, $y + 1);
+        $near_cells[] = $this->at($x, $y + 1);
         // bottom left
-        $near_cells[] = $_at($x + 1, $y - 1);
+        $near_cells[] = $this->at($x + 1, $y - 1);
         // directly below
-        $near_cells[] = $_at($x + 1, $y);
+        $near_cells[] = $this->at($x + 1, $y);
         // bottom right
-        $near_cells[] = $_at($x + 1, $y + 1);
+        $near_cells[] = $this->at($x + 1, $y + 1);
         // mantieni solo le celle vive
         $near_cells_alive = array_filter($near_cells,
             fn($cell) => !empty($cell) && $cell->isAlive() // true retained, false skipped
