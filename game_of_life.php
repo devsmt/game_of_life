@@ -15,7 +15,7 @@ interface ICell {
     public function willLive(int $c_alive_near): bool;
 }
 //----------------------------------------------------------------------------
-//  CLI implementation
+//  Base implementation
 //----------------------------------------------------------------------------
 abstract class CellBase implements ICell {
     protected bool $is_alive = false;
@@ -65,6 +65,42 @@ abstract class CellBase implements ICell {
     //     return false;
     // }
 }
+// la griglia rappresenta la matrice di celle
+// logica comune a tutte le sottoclassi
+abstract class BaseGrid implements IGrid {
+    protected int $c_horizontal;
+    protected int $c_vertical;
+    // stato corrente
+    // stato futuro calcolato da generate()
+    /** @var  Matrix $matrix */
+    protected $matrix;
+    public function __construct(
+        int $c_horizontal,
+        int $c_vertical,
+        Matrix $matrix
+    ) {
+        $this->c_horizontal = $c_horizontal;
+        $this->c_vertical = $c_vertical;
+        $this->matrix = $matrix;
+    }
+    // computa la prossima generazione, il nuovo stato e aggiorna la propria matrice con la nuova
+    protected function generateNext(): void{
+        $matrix_new = $this->matrix->generateNext(
+            $this->c_horizontal,
+            $this->c_vertical
+        );
+        $this->matrix = $matrix_new;
+    }
+    // computa la prossima generazione e lo rende
+    // questo metodo, assicurare che la prossima iterazione sia già calcolata
+    public function generateAndRender(): string{
+        $this->generateNext();
+        return $this->render();
+    }
+}
+//----------------------------------------------------------------------------
+//  CLI implementation
+//----------------------------------------------------------------------------
 // rappresenta una cella in CLI
 class CLICell extends CellBase implements ICell {
     const CHAR_ALIVE = '#';
@@ -77,6 +113,27 @@ class CLICell extends CellBase implements ICell {
         return $this->is_alive ? self::CHAR_ALIVE : self::CHAR_DEAD;
     }
 }
+
+// rappresenta la griglia resa in CLI, composta di celle
+class CLIGrid extends BaseGrid implements IGrid {
+    // rende in cli lo stato del gioco
+    public function render(): string{
+        $res = $this->matrix->dumpState(
+            $row_sep = "\n",
+            function ($cell): string {
+                return $cell->render();
+            }
+        );
+        return $res;
+    }
+    // pulisce la griglia per il successivo rendering, dipende dal tipo di rendering
+    public function clear(): void{
+        system('clear');
+    }
+}
+//----------------------------------------------------------------------------
+//  Matrix DS
+//----------------------------------------------------------------------------
 // main datastructure of the game
 // - computa il numero di celle adiacenti
 // - computa la prossima generazione
@@ -205,56 +262,6 @@ class Matrix {
             $ret .= $row_sep;
         }
         return $ret;
-    }
-}
-// la griglia rappresenta la matrice di celle
-// logica comune a tutte le sottoclassi
-abstract class BaseGrid implements IGrid {
-    protected int $c_horizontal;
-    protected int $c_vertical;
-    // stato corrente
-    // stato futuro calcolato da generate()
-    /** @var  Matrix $matrix */
-    protected $matrix;
-    public function __construct(
-        int $c_horizontal,
-        int $c_vertical,
-        Matrix $matrix
-    ) {
-        $this->c_horizontal = $c_horizontal;
-        $this->c_vertical = $c_vertical;
-        $this->matrix = $matrix;
-    }
-    // computa la prossima generazione, il nuovo stato e aggiorna la propria matrice con la nuova
-    protected function generateNext(): void{
-        $matrix_new = $this->matrix->generateNext(
-            $this->c_horizontal,
-            $this->c_vertical
-        );
-        $this->matrix = $matrix_new;
-    }
-    // computa la prossima generazione e lo rende
-    // questo metodo, assicurare che la prossima iterazione sia già calcolata
-    public function generateAndRender(): string{
-        $this->generateNext();
-        return $this->render();
-    }
-}
-// rappresenta la griglia resa in CLI, composta di celle
-class CLIGrid extends BaseGrid implements IGrid {
-    // rende in cli lo stato del gioco
-    public function render(): string{
-        $res = $this->matrix->dumpState(
-            $row_sep = "\n",
-            function ($cell): string {
-                return $cell->render();
-            }
-        );
-        return $res;
-    }
-    // pulisce la griglia per il successivo rendering, dipende dal tipo di rendering
-    public function clear(): void{
-        system('clear');
     }
 }
 // manager del gioco, costruisce le dipendenze per fornirle agli oggetti che collabolarano
