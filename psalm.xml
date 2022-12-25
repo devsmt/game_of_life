@@ -6,7 +6,7 @@
     xmlns="https://getpsalm.org/schema/config"
     xsi:schemaLocation="https://getpsalm.org/schema/config vendor/vimeo/psalm/config.xsd"
 >
-   
+
     <projectFiles>
         <file name="./game_of_life.php" />
         <!--
@@ -15,7 +15,7 @@
         </ignoreFiles>
         -->
     </projectFiles>
-    
+
 
     <issueHandlers>
         <LessSpecificReturnType errorLevel="info" />
@@ -47,7 +47,7 @@
 
         <PropertyNotSetInConstructor errorLevel="info" />
         <MissingConstructor errorLevel="info" />
-        <MissingClosureParamType errorLevel="error" />
+        <MissingClosureParamType errorLevel="info" />
         <MissingParamType errorLevel="error" />
 
         <RedundantCondition errorLevel="info" />
@@ -71,7 +71,7 @@
         <UndefinedPropertyFetch errorLevel="info" />
         <UndefinedFunction errorLevel="error" />
         <ReservedWord errorLevel="info" />  <!-- should not complain about :void -->
- 
+
         <LessSpecificReturnType errorLevel="info" />
     </issueHandlers>
 
