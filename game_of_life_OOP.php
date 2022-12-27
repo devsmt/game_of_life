@@ -1,11 +1,11 @@
 <?php
 declare (strict_types = 1);
-// il gioco potrebbe essere reso in più sistemi(HTML,canvas,altro),
-// le segenti interfacce definiscono cosa gli altri oggetti si aspettano dalla collaborazione
+// the program may be represented in many systems, given the same rules (HTML,canvas,altro),
+// the interfaces define what the system expects of the components for the collaboration
 interface IGrid {
     public function render(): string;
     public function clear(): void;
-    // aggiorna la propria matrice con la nuova generazione
+    // update the underlying data structure and render it
     public function generateAndRender(): string;
 }
 interface ICell {
@@ -101,23 +101,22 @@ abstract class BaseGrid implements IGrid {
 //----------------------------------------------------------------------------
 //  CLI implementation
 //----------------------------------------------------------------------------
-// rappresenta una cella in CLI
+// represent the cell in CLI
 class CLICell extends CellBase implements ICell {
     const CHAR_ALIVE = '#';
     const CHAR_DEAD = '.';
     public function __construct(bool $is_alive) {
         parent::__construct($is_alive);
     }
-    // rappresenta visivamente la cella
+    // represent the cell as a char
     public function render(): string {
         return $this->is_alive ? self::CHAR_ALIVE : self::CHAR_DEAD;
     }
 }
-
-// rappresenta la griglia resa in CLI, composta di celle
+// represent a grid (composed of Cells) in CLI
 class CLIGrid extends BaseGrid implements IGrid {
-    // rende in cli lo stato del gioco
-    public function render(): string{
+    // render in CLI the game state
+    public function render(): string {
         $res = $this->matrix->dumpState(
             $row_sep = "\n",
             function ($cell): string {
@@ -126,7 +125,7 @@ class CLIGrid extends BaseGrid implements IGrid {
         );
         return $res;
     }
-    // pulisce la griglia per il successivo rendering, dipende dal tipo di rendering
+    // clearing the grid between generations depends on the rendering type
     public function clear(): void{
         system('clear');
     }
@@ -135,8 +134,8 @@ class CLIGrid extends BaseGrid implements IGrid {
 //  Matrix DS
 //----------------------------------------------------------------------------
 // main datastructure of the game
-// - computa il numero di celle adiacenti
-// - computa la prossima generazione
+// - compute ther number of adjacent cells
+// - compute the next generation
 class Matrix {
     /** @var  ICell[][] $matrix_next */
     protected array $matrix = [];
@@ -145,31 +144,31 @@ class Matrix {
     public function __construct(string $cell_type) {
         // param validation:
         /** @psalm-suppress ArgumentTypeCoercion */
-        if (!is_subclass_of($cell_type, (string) 'ICell', $allow_str = true)) {
+        if (!is_subclass_of($cell_type, 'ICell', $allow_str = true)) {
             $msg = sprintf('Errore: cell type is undefined "%s" or of wrong type', $cell_type);
             throw new \Exception($msg);
         }
         $this->cell_type = $cell_type;
     }
     /**
-     * accede alla matrice
+     * access the underlying data structure
      * @return null|ICell
      */
     protected function at(int $x, int $y) {
         return isset($this->matrix[$x][$y]) ? $this->matrix[$x][$y] : null;
     }
     /**
-     * applica a ciascun elemento la closure argomento
+     * apply the closure to each element
      * @param callable(ICell, int, int): ICell $fn
      */
     public function map($fn): void {
         foreach ($this->matrix as $x => $row) {
             foreach ($row as $y => &$cell) {
-                $cell = $fn($cell, $x, $y);
+                $cell = $fn($cell, (int)$x, (int)$y);
             }
         }
     }
-    // conta le 4/8 celle adiacenti, vive
+    // count the adjacent cells tha are alive
     public function getNearAliveCount(int $x, int $y): int{
         /** @var  array<int, null|ICell> $near_cells */
         $near_cells = [];
@@ -204,13 +203,14 @@ class Matrix {
         $this->matrix = [];
         for ($x = 0; $x < $c_horizontal; $x++) {
             for ($y = 0; $y < $c_vertical; $y++) {
-                $rnd_is_alive = (bool) (random_int($min = 0, $max) === 1);
+                $rnd_is_alive = (random_int($min = 0, $max) === 1);
                 /** @var ICell $cell */
                 $cell = new $this->cell_type($rnd_is_alive);
                 $this->matrix[$x][$y] = $cell;
             }
         }
     }
+    /** @param bool[][]|int[][] $state */
     public function setState(array $state = []): void {
         // init cells as instructed
         foreach ($state as $x => $row) {
@@ -223,7 +223,7 @@ class Matrix {
             }
         }
     }
-    // computa la prossima generazione
+    // compute the next generation
     public function generateNext(int $c_horizontal, int $c_vertical): Matrix{
         $matrix_next = [];
         for ($x = 0; $x < $c_horizontal; $x++) {
@@ -249,11 +249,13 @@ class Matrix {
     public function dumpState(string $row_sep = "\n", callable $fn = null): string {
         // dumper function di default
         if (empty($fn)) {
-            $fn = function ($cell): string {
+            /** @param callable(ICell): string $fn */
+            $fn = function (ICell $cell): string {
                 return $cell->isAlive() ? '1' : '0';
             };
         }
         $ret = '';
+        /** @var int[] $row */
         foreach ($this->matrix as $x => $row) {
             foreach ($row as $y => $val) {
                 $cell = $this->matrix[$x][$y];
@@ -264,15 +266,15 @@ class Matrix {
         return $ret;
     }
 }
-// manager del gioco, costruisce le dipendenze per fornirle agli oggetti che collabolarano
+// game manager: builds dependencies and initialize the object graph, the run the generations
 class GameOfLife {
     private String $grid_type;
     private String $cell_type;
     //
     private int $c_horizontal;
     private int $c_vertical;
-    private int $num_cicles; // rendiamo n cicli della dutata di 1 secondo, potenzialmente la computazione sarebbe infinita
-    private int $interval_secs; // durata di un intervallo
+    private int $num_cicles; // number of cycles to compute
+    private int $interval_secs; // interval duration
     // NOTE: inject all state and dependency from here
     // usually from a configurarion of some kind
     public function __construct(
@@ -298,6 +300,7 @@ class GameOfLife {
     public function run(): void{
         $matrix = new Matrix($this->cell_type);
         $matrix->initState($this->c_horizontal, $this->c_vertical);
+        /** @var IGrid $grid */
         $grid = new $this->grid_type(
             $this->c_horizontal,
             $this->c_vertical,
@@ -331,13 +334,12 @@ function maybe(array $hash, $key, $def) {
  * @param mixed $exp
  */
 function assertEquals($res, $exp, string $label = ''): void{
-    /** @param mixed $v */
+    /** @var callable(mixed): string $_e */
     $_e = function ($v): string {return json_encode($v);};
     echo ($res !== $exp) ?
     "ERROR: {$_e($res)} !== {$_e($exp)}  $label\n"
     : "ok {$_e($res)} === {$_e($res)}  $label\n";
 }
-
 function arg_val(string $key, string $def = ''): string {
     /** @psalm-suppress PossiblyUndefinedArrayOffset */
     foreach ($_SERVER['argv'] as $val) {
@@ -360,7 +362,6 @@ function arg_flag(string $key): bool {
     }
     return false;
 }
-
 //----------------------------------------------------------------------------
 //  main
 //----------------------------------------------------------------------------
@@ -373,7 +374,6 @@ actions:
         --cicles= number of cycles
         --int= secs interval
     test = unit test of internals
-
 \n";
 }
 // run unit tests of the procedure
@@ -444,7 +444,7 @@ function action_run(array $argv): void{
 // run the game or the unit tests
 function main(int $argc, array $argv): void {
     try {
-        $action = maybe($argv, '1', 'run');
+        $action = (string) maybe($argv, '1', 'run');
         switch ($action) {
         case 'run':
             action_run($argv);

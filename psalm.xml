@@ -8,7 +8,7 @@
 >
 
     <projectFiles>
-        <file name="./game_of_life.php" />
+        <file name="./game_of_life_OOP.php" />
         <file name="./game_of_life_procedural.php" />
         <!--
         <ignoreFiles>

@@ -81,7 +81,7 @@ function matrix_init_state(int $c_horizontal, int $c_vertical, int $max = 3): ar
     $matrix = [];
     for ($x = 0; $x < $c_horizontal; $x++) {
         for ($y = 0; $y < $c_vertical; $y++) {
-            $rnd_is_alive = (bool) (random_int($min = 0, $max) === 1);
+            $rnd_is_alive = (random_int($min = 0, $max) === 1);
             $matrix[$x][$y] = $rnd_is_alive;
         }
     }
@@ -98,8 +98,10 @@ function matrix_generate_next(array $matrix, int $c_horizontal, int $c_vertical)
         for ($y = 0; $y < $c_vertical; $y++) {
             $c_alive_near = matrix_count_near_alive($matrix, $x, $y);
             $cell_prev = matrix_at($matrix, $x, $y);
-            $will_live = cell_will_live($cell_prev, $c_alive_near);
-            $matrix_next[$x][$y] = $will_live;
+            if (!empty($cell_prev)) {
+                $will_live = cell_will_live($cell_prev, $c_alive_near);
+                $matrix_next[$x][$y] = $will_live;
+            }
         }
     }
     return $matrix_next;
