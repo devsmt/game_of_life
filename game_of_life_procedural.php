@@ -98,13 +98,8 @@ function matrix_generate_next(array $matrix, int $c_horizontal, int $c_vertical)
         for ($y = 0; $y < $c_vertical; $y++) {
             $c_alive_near = matrix_count_near_alive($matrix, $x, $y);
             $cell_prev = matrix_at($matrix, $x, $y);
-            if (null !== $cell_prev) {
-                $will_live = cell_will_live($cell_prev, $c_alive_near);
-                $matrix_next[$x][$y] = $will_live;
-            } else {
-                $msg = sprintf('Error: cant find a cell at [%s,%s]', $x, $y);
-                throw new \Exception($msg);
-            }
+            $will_live = cell_will_live($cell_prev, $c_alive_near);
+            $matrix_next[$x][$y] = $will_live;
         }
     }
     return $matrix_next;
@@ -130,11 +125,10 @@ function main(): void{
     $matrix = matrix_init_state($c_horizontal, $c_vertical);
     for ($i = 0; $i < $num_cicles; $i++) {
         grid_clear();
-        // computa la prossima generazione, il nuovo stato e rendilo
+        // compute the next generation, than render it
         $matrix = matrix_generate_next($matrix, $c_horizontal, $c_vertical);
         echo grid_render($matrix);
         // echo sprintf("cycle %s of {$num_cicles} \n", 1 + $i);
-        /** @psalm-suppress ArgumentTypeCoercion */
         sleep($interval_secs);
     }
 }
