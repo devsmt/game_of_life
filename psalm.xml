@@ -9,6 +9,7 @@
 
     <projectFiles>
         <file name="./game_of_life.php" />
+        <file name="./game_of_life_procedural.php" />
         <!--
         <ignoreFiles>
            <directory name="vendor" />
